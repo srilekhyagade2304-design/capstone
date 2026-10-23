@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Campus Lost &amp; Found Match Desk</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eceff3;--ink:#14213d;--mute:#5b6679;--card:#fff;--line:#d3d9e2;--tag:#f2b705;--ok:#0f766e;--bad:#b3261e;--r:10px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,system-ui,sans-serif}
+h1,h2,h3{font-family:'Bricolage Grotesque',Figtree,sans-serif;line-height:1.15;margin:0 0 .5rem}
+h1{font-size:2.1rem}h2{font-size:1.4rem}h3{font-size:1.05rem}
+header{background:var(--ink);color:#fff;padding:.8rem 1.2rem;display:flex;flex-wrap:wrap;gap:.6rem 1.4rem;align-items:center}
+header b{font:700 1.15rem 'Bricolage Grotesque',sans-serif}
+nav{display:flex;flex-wrap:wrap;gap:.3rem;flex:1}
+nav a{color:#cfd7e6;text-decoration:none;padding:.3rem .65rem;border-radius:99px;font-size:.92rem}
+nav a.on,nav a:hover{background:#fff;color:var(--ink)}
+.who{font-size:.85rem;color:#cfd7e6;display:flex;gap:.6rem;align-items:center}
+main{max-width:980px;margin:0 auto;padding:1.4rem 1rem 3rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:1rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:1rem 1rem 1rem 2.3rem;position:relative;margin-bottom:1rem}
+.grid .card{margin:0}
+.card:before{content:"";position:absolute;left:.8rem;top:1rem;width:.8rem;height:.8rem;border-radius:50%;background:var(--bg);border:2px solid var(--tag)}
+.plain{padding-left:1rem}.plain:before{display:none}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.mute{color:var(--mute);font-size:.9rem}
+.pill{display:inline-block;padding:.1rem .6rem;border-radius:99px;font-size:.8rem;background:#e6eaf1}
+.pill.y{background:var(--tag)}.pill.g{background:#cdebe7;color:#0b4f49}.pill.r{background:#f6d6d3;color:#7a1a14}
+label{display:block;font-weight:600;font-size:.9rem;margin:.7rem 0 .2rem}
+input,select,textarea{width:100%;padding:.55rem .65rem;border:1px solid #aeb7c6;border-radius:8px;font:inherit;background:#fff;color:var(--ink)}
+textarea{min-height:80px}
+button,.btn{background:var(--ink);color:#fff;border:0;border-radius:8px;padding:.55rem 1rem;font:600 .95rem Figtree,sans-serif;cursor:pointer;text-decoration:none;display:inline-block}
+button.alt{background:#fff;color:var(--ink);border:1px solid var(--ink)}
+button.tag{background:var(--tag);color:var(--ink)}
+button.bad{background:var(--bad)}
+:focus-visible{outline:3px solid var(--tag);outline-offset:2px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:3.2rem;background:var(--ink);color:#fff;padding:.7rem 1.1rem;border-radius:10px;max-width:90vw;z-index:9;box-shadow:0 6px 20px #0004}
+.toast.err{background:var(--bad)}
+.chat{max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:.6rem;margin-bottom:.8rem}
+.msg{padding:.6rem .8rem;border-radius:10px;max-width:88%;white-space:pre-wrap}
+.msg.u{background:var(--ink);color:#fff;align-self:flex-end}.msg.a{background:#fff;border:1px solid var(--line)}
+.trace{font:.82rem ui-monospace,Menlo,monospace;background:#f4f6f9;border:1px solid var(--line);border-radius:8px;padding:.5rem .7rem;margin:.4rem 0}
+.trace .ok{color:var(--ok)}
+.steps{display:flex;gap:.3rem;margin:.6rem 0}.steps i{flex:1;height:6px;border-radius:3px;background:#dde2ea}.steps i.d{background:var(--ok)}.steps i.x{background:var(--bad)}
+footer{position:fixed;bottom:0;left:0;right:0;background:#0d1730;color:#9fb0cf;font:.72rem ui-monospace,Menlo,monospace;padding:.35rem 1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero{background:var(--ink);color:#fff;border-radius:14px;padding:1.4rem;margin-bottom:1.2rem}
+.hero p{color:#cfd7e6;max-width:60ch;margin:.3rem 0 0}
+@media(prefers-reduced-motion:no-preference){.toast{animation:up .2s}@keyframes up{from{opacity:0;transform:translate(-50%,8px)}}}
+</style>
+</head>
+<body>
+<header><b>Match Desk</b><nav id="nav"></nav><div class="who" id="who"></div></header>
+<main id="app"></main>
+<footer id="net">API log: ready</footer>
+<script>
+/* ================= Demo backend (runs in the browser; replace with Express + MongoDB for production) ================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=p=>p+Math.random().toString(36).slice(2,8);
+const day=n=>new Date(Date.now()-n*864e5).toISOString().slice(0,10);
+const ago=d=>Math.round((Date.now()-new Date(d))/864e5);
+const KEY='lf_db_v1',DOMAIN='@campus.edu',CATS=['Bags','Electronics','Wallets & Cards','Keys','Clothing','Books','Other'];
+const MEM={};const st=(k,v,del)=>{try{const S=k==='lf_ses'?sessionStorage:localStorage;if(del)S.removeItem(k);else if(v===undefined)return S.getItem(k);else S.setItem(k,v)}catch{if(del)delete MEM[k];else if(v===undefined)return MEM[k]??null;else MEM[k]=v}};
+let db=JSON.parse(st(KEY)||'null'),ses=JSON.parse(st('lf_ses')||'null'),NET=[];
+const save=()=>st(KEY,JSON.stringify(db));
+async function H(p,salt){const d='lf::'+salt+p;try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(d));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch{let h=5381;for(const c of d)h=(h*33^c.charCodeAt(0))>>>0;return'f'+h}}
+const POL=[
+{id:'P1',title:'Claim deadlines',text:'Claims must be submitted within 30 days of the item being logged. Desks hold unclaimed items for 60 days, then they are released under the retention rule.'},
+{id:'P2',title:'Accepted evidence',text:'Describe at least two identifying details that are not in the public listing, such as interior marks, contents, a serial number, or purchase proof. Photos of the item taken before it was lost are accepted.'},
+{id:'P3',title:'Collection steps',text:'After approval, visit the assigned desk with your campus ID. The designated desk officer verifies your identity in person and records the handover. Nobody else can hand over an item.'},
+{id:'P4',title:'Privacy of details',text:'Serial numbers, exact storage locations and claim evidence stay private. Matches and suggestions never confirm ownership and never reveal hidden markings.'},
+{id:'P5',title:'Desk opening hours',text:'Library Desk and Engineering Desk are open Monday to Friday 9:00 to 17:00 and Saturday 10:00 to 13:00. Closed on public holidays.'}];
+const REQ={Bags:'Describe interior contents or marks and one exterior feature.',Electronics:'Give a serial number or purchase proof, plus a case or lock-screen detail.','Wallets & Cards':'Name one card or ID inside (not its number) and one non-obvious feature.',Keys:'Describe the keyring, key count and any tag or cut pattern.',Clothing:'Describe the brand, size and any label or repair mark.',Books:'Name the owner inscription, notes or highlighted pages.',Other:'Describe two details that are not visible in the public listing.'};
+async function seed(){
+ const pw=u=>H('Campus#123',u);
+ db={users:[],items:[],reports:[],claims:[],desks:[{id:'D1',name:'Library Desk',staff:['u_olivia'],retention:60},{id:'D2',name:'Engineering Desk',staff:['u_omar'],retention:60}],csrf:{},fails:{},codes:{}};
+ for(const [id,n,e,r] of [['u_alice','Alice Rao','alice','member'],['u_bob','Bob Khan','bob','member'],['u_olivia','Olivia Desk','olivia','officer'],['u_omar','Omar Desk','omar','officer'],['u_mo','Mo Moderator','mo','moderator']])
+  db.users.push({id,name:n,email:e+DOMAIN,role:r,verified:true,hash:await pw(e+DOMAIN)});
+ const it=(cat,pub,area,d,desk,priv,st='open')=>db.items.push({id:uid('i_'),cat,pub,area,date:day(d),desk,priv,status:st,finder:'u_bob'});
+ it('Bags','Black laptop sleeve with a zip, slightly worn','Library',2,'D1',{serial:'LS-44821',storage:'Shelf B3, Library desk cabinet',marks:'Red fox sticker inside the lining'});
+ it('Bags','Black laptop sleeve, padded, grey zipper','Library',3,'D1',{serial:'none',storage:'Shelf B4, Library desk cabinet',marks:'Initials M.K. stitched near the handle'});
+ it('Electronics','White wireless earbuds in a small charging case','Engineering Block',1,'D2',{serial:'EB-99012',storage:'Locker 7',marks:'Scratch on case lid, blue silicone cover'});
+ it('Wallets & Cards','Brown leather wallet','Cafeteria',5,'D1',{serial:'none',storage:'Drawer 2',marks:'Library card of a student, folded 20 note'});
+ it('Keys','Set of three keys on a green carabiner','Sports Complex',8,'D2',{serial:'none',storage:'Key board K5',marks:'Brass key with blue tape'});
+ it('Books','Chemistry textbook, hardcover','Science Hall',20,'D1',{serial:'none',storage:'Shelf A1',marks:'Name written on page 3'},'returned');
+ save();
+}
+const E=(c,m)=>Object.assign(new Error(m),{code:c});
+const cur=()=>{if(!ses||ses.exp<Date.now()){ses=null;st('lf_ses',0,1);return null}return{...ses,user:db.users.find(u=>u.id===ses.uid)}};
+function log(m,p,c){NET.unshift(`${m} ${p} -> ${c}`);$('#net').textContent='API log: '+NET.slice(0,4).join('   |   ')}
+/* every protected route goes through here: session, role, CSRF, error logging */
+async function api(m,p,roles,fn){
+ try{
+  let u=null;
+  if(roles){const s=cur();if(!s)throw E(401,'Your session ended. Sign in again.');u=s.user;
+   if(!roles.includes(u.role))throw E(403,'Your role cannot use this feature.');
+   if(m!=='GET'&&db.csrf[u.id]!==s.csrf)throw E(403,'CSRF token mismatch.')}
+  const r=await fn(u);log(m,p,m==='POST'?201:200);return r;
+ }catch(e){log(m,p,e.code||500);throw e}
+}
+const STOP=new Set('the and with has have was for from near some small large a an of on in at it its is my i me'.split(' '));
+const SYN={pouch:'bag',sleeve:'case',notebook:'laptop',macbook:'laptop',earbud:'headphone',airpod:'headphone',earphone:'headphone',backpack:'bag',purse:'wallet',cardholder:'wallet',charcoal:'black',dark:'black',zipper:'zip',zipped:'zip',jacket:'coat',hoodie:'coat'};
+const tok=t=>String(t).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>2&&!STOP.has(w)).map(w=>{w=w.replace(/s$/,'');return SYN[w]||w});
+const CATKEY={Bags:'bag case backpack',Electronics:'laptop headphone phone charger earbud camera',  'Wallets & Cards':'wallet card',Keys:'key',Clothing:'coat jacket scarf',Books:'book textbook'};
+const guessCat=t=>{const k=tok(t);for(const c in CATKEY)if(tok(CATKEY[c]).some(w=>k.includes(w)))return c;return 'Other'};
+function cos(a,b,df,N){const va={},vb={};tok(a).forEach(w=>va[w]=(va[w]||0)+1);tok(b).forEach(w=>vb[w]=(vb[w]||0)+1);
+ const wt=w=>Math.log(1+N/(1+(df[w]||0)));let d=0,na=0,nb=0;
+ for(const w in va){na+=(va[w]*wt(w))**2;if(vb[w])d+=va[w]*wt(w)*vb[w]*wt(w)}for(const w in vb)nb+=(vb[w]*wt(w))**2;
+ return na&&nb?d/Math.sqrt(na*nb):0}
+/* semantic-style similarity on PUBLIC descriptors only; returns bands, never certainty */
+function matchPublic(desc,{cat,date,area}={}){
+ const pool=db.items.filter(i=>i.status==='open'),df={};pool.forEach(i=>new Set(tok(i.pub)).forEach(w=>df[w]=(df[w]||0)+1));
+ let out=pool.map(i=>({i,s:cos(desc,i.pub,df,pool.length)}));
+ const steps=[`searchPublicItems("${desc.slice(0,40)}") -> ${out.filter(x=>x.s>.05).length} candidates`];
+ out=out.filter(x=>x.s>.05);
+ if(cat&&cat!=='Any')out=out.filter(x=>x.i.cat===cat);
+ if(date)out=out.filter(x=>Math.abs((new Date(x.i.date)-new Date(date))/864e5)<=10);
+ if(area)out.forEach(x=>{if(x.i.area.toLowerCase().includes(area.toLowerCase()))x.s+=.15});
+ steps.push(`filterByReportWindow(${date||'any time'}, ${area||'any area'}) -> ${out.length} plausible`);
+ out.sort((a,b)=>b.s-a.s);return{res:out.slice(0,5).map(x=>({item:pubView(x.i),band:x.s>.5?'Strong overlap':x.s>.25?'Possible':'Weak'})),steps}}
+const wk=d=>{const n=ago(d);return n<=7?'This week':n<=14?'Last week':n<=31?'This month':'Older'};
+const pubView=i=>({id:i.id,cat:i.cat,desc:i.pub,area:i.area,when:wk(i.date),desk:db.desks.find(d=>d.id===i.desk).name});
+const deskOf=u=>db.desks.filter(d=>d.staff.includes(u.id)).map(d=>d.id);
+/* ---- routes ---- */
+const R={
+ foundItems:()=>api('GET','/api/found-items',null,async()=>db.items.filter(i=>i.status==='open').map(pubView)),
+ help:()=>api('GET','/api/lost-found/help',null,async()=>({pol:POL,desks:db.desks})),
+ async signup(name,email,pw){email=email.trim().toLowerCase();
+  if(!email.endsWith(DOMAIN))throw E(400,'Use your campus email ('+DOMAIN+').');
+  if(pw.length<8||!/\d/.test(pw)||!/[A-Za-z]/.test(pw))throw E(400,'Password needs 8+ characters with letters and numbers.');
+  if(db.users.some(u=>u.email===email))throw E(409,'That email already has an account.');
+  db.users.push({id:uid('u_'),name,email,role:'member',verified:false,hash:await H(pw,email)});
+  const c=String(Math.floor(1e5+Math.random()*9e5));db.codes[email]=c;save();log('POST','/api/auth/signup',201);return c},
+ verify(email,code){if(db.codes[email.trim().toLowerCase()]!==code)throw E(400,'That code is not correct.');db.users.find(u=>u.email===email.trim().toLowerCase()).verified=true;delete db.codes[email];save()},
+ async login(email,pw){email=email.trim().toLowerCase();const f=db.fails[email]||{n:0,t:0};
+  if(f.n>=5&&Date.now()-f.t<6e4)throw E(429,'Too many attempts. Wait one minute.');
+  const u=db.users.find(x=>x.email===email);
+  if(!u||u.hash!==await H(pw,email)){db.fails[email]={n:f.n+1,t:Date.now()};save();log('POST','/api/auth/login',401);throw E(401,'Email or password is wrong.')}
+  if(!u.verified)throw E(403,'Verify your campus email first.');
+  delete db.fails[email];const csrf=uid('csrf_');db.csrf[u.id]=csrf;save();
+  ses={uid:u.id,csrf,exp:Date.now()+30*6e4};st('lf_ses',JSON.stringify(ses));log('POST','/api/auth/login',200)},
+ logout(){ses=null;st('lf_ses',0,1)},
+ async reset(email,pw){const u=db.users.find(x=>x.email===email.trim().toLowerCase());if(u){u.hash=await H(pw,u.email);save()}},
+ lostReport:(d)=>api('POST','/api/lost-reports',['member'],async u=>{if(!d.desc.trim())throw E(400,'Describe the item.');
+  db.reports.push({id:uid('r_'),type:'lost',uid:u.id,...d,created:day(0)});save();return matchPublic(d.desc,d)}),
+ foundReport:(d)=>api('POST','/api/found-reports',['member'],async u=>{if(!d.pub.trim()||!d.marks.trim())throw E(400,'Add a public description and a private identifying detail.');
+  db.items.push({id:uid('i_'),cat:d.cat,pub:d.pub,area:d.area,date:d.date||day(0),desk:d.desk,status:'open',finder:u.id,priv:{serial:d.serial||'none',storage:d.storage,marks:d.marks}});save()}),
+ myFound:()=>api('GET','/api/my-found',['member'],async u=>db.items.filter(i=>i.finder===u.id)),
+ claim:(itemId,d)=>api('POST','/api/items/:id/claims',['member'],async u=>{const i=db.items.find(x=>x.id===itemId);
+  if(!i)throw E(404,'Item not found.');if(i.status!=='open')throw E(410,'This item is closed to new claims.');
+  if(db.claims.some(c=>c.itemId===itemId&&c.uid===u.id))throw E(409,'You already claimed this item.');
+  if(d.detail.trim().split(/\s+/).length<4)throw E(400,'Give more identifying detail.');
+  db.claims.push({id:uid('c_'),itemId,uid:u.id,detail:d.detail,evidence:d.evidence,status:'pending',created:day(0),note:''});save()}),
+ myClaims:()=>api('GET','/api/my-claims',['member'],async u=>db.claims.filter(c=>c.uid===u.id).map(c=>({...c,item:pubView(db.items.find(i=>i.id===c.itemId))}))),
+ deskClaims:()=>api('GET','/api/claims/:id/evidence',['officer'],async u=>{const ds=deskOf(u);
+  return db.claims.filter(c=>ds.includes(db.items.find(i=>i.id===c.itemId).desk)).map(c=>{const i=db.items.find(x=>x.id===c.itemId);
+   const a=new Set(tok(c.detail+' '+c.evidence)),b=tok(i.priv.marks+' '+i.priv.serial+' '+i.pub);
+   return{...c,item:i,claimant:db.users.find(x=>x.id===c.uid).email,overlap:[...new Set(b.filter(w=>a.has(w)))]}})}),
+ decide:(id,ok,note)=>api('POST','/api/claims/:id/decision',['officer'],async u=>{const c=db.claims.find(x=>x.id===id),i=db.items.find(x=>x.id===c.itemId);
+  if(!deskOf(u).includes(i.desk))throw E(403,'You are not assigned to this desk.');if(c.status!=='pending')throw E(409,'Claim already decided.');
+  c.status=ok?'approved':'rejected';c.note=note;c.by=u.id;save()}),
+ handover:(id)=>api('POST','/api/claims/:id/handover',['officer'],async u=>{const c=db.claims.find(x=>x.id===id),i=db.items.find(x=>x.id===c.itemId);
+  if(!deskOf(u).includes(i.desk))throw E(403,'Only the designated desk officer can approve a handover.');
+  if(c.status!=='approved')throw E(409,'Approve the claim first.');
+  c.status='handed over';i.status='returned';db.claims.filter(x=>x.itemId===i.id&&x.id!==c.id&&x.status==='pending').forEach(x=>{x.status='closed';x.note='Item returned to another claimant.'});save()}),
+ desks:()=>api('GET','/api/desks',['moderator'],async()=>({desks:db.desks,officers:db.users.filter(u=>u.role==='officer')})),
+ staff:(id,ids)=>api('PATCH','/api/desks/:id/staff',['moderator'],async()=>{db.desks.find(d=>d.id===id).staff=ids;save()}),
+ purge:()=>api('POST','/api/desks/retention',['moderator'],async()=>{let n=0;db.items.forEach(i=>{const d=db.desks.find(x=>x.id===i.desk);if(i.status==='open'&&ago(i.date)>d.retention){i.status='expired';n++}});save();return n}),
+ /* RAG chat: approved policies + the member's OWN claim status only */
+ chat:(q)=>api('POST','/api/recovery-chat',['member'],async u=>{const tl=q.toLowerCase(),tr=['retrievePolicy'];
+  if(/(other|someone|another).*(claim|person|student)|serial|hidden|where (is|are).*(stored|kept)|storage|marking|reveal/.test(tl))
+   return{text:'I can\'t share identifying features, storage locations or anything about other claimants. That protects the real owner. Describe your own item and the desk officer will compare it with their records.',cites:['P4'],tr:[...tr,'privacyGuard -> blocked']};
+  if(/status|my claim/.test(tl)){const mine=db.claims.filter(c=>c.uid===u.id);tr.push('readOwnClaims -> '+mine.length);
+   return{text:mine.length?mine.map(c=>`Claim on "${db.items.find(i=>i.id===c.itemId).pub}": ${c.status}.${c.note?' Note: '+c.note:''}`).join('\n'):'You have no claims yet. Browse found items or ask the matching agent.',cites:[],tr}}
+  const q2=tok(q),sc=POL.map(p=>({p,s:tok(p.title+' '+p.text).filter(w=>q2.includes(w)).length})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,2);
+  tr.push(`retrievePolicy -> ${sc.length} chunks`);
+  if(!sc.length)return{text:'I could not find that in the approved desk policies. Please ask the desk during opening hours.',cites:[],tr};
+  return{text:sc.map(x=>x.p.text).join('\n\n'),cites:sc.map(x=>x.p.id),tr}}),
+ /* agent: searchPublicItems -> filterByReportWindow -> readClaimRequirements, then drafts (never decides) */
+ agent:(d)=>api('POST','/api/matching-agent',['member'],async()=>{const cat=guessCat(d.desc),m=matchPublic(d.desc,{cat,date:d.date,area:d.area});
+  m.steps.push(`readClaimRequirements("${cat}") -> ok`);
+  const q=[];if(!/black|white|red|blue|green|grey|brown|silver/i.test(d.desc))q.push('What colour is it?');
+  if(!d.area)q.push('Where did you last have it?');if(!d.date)q.push('Roughly when did you lose it?');
+  if(m.res.length>1)q.push('Several similar items exist. What is one detail only you would know (a mark, content, sticker)? Do not post it here; put it in the private claim.');
+  return{...m,cat,req:REQ[cat],q}})
+};
+/* ================= UI ================= */
+const V={};const NEED={lost:'member',found:'member',claims:'member',chat:'member',agent:'member',claim:'member',review:'officer',desks:'moderator'};
+const MENU={member:[['agent','Find my item'],['lost','Report lost'],['found','Report found'],['claims','My claims'],['chat','Recovery chat']],officer:[['review','Desk review']],moderator:[['desks','Desks & retention']]};
+const toast=(m,e)=>{const t=document.createElement('div');t.className='toast'+(e?' err':'');t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),4200)};
+const opts=a=>a.map(x=>`<option>${esc(x)}</option>`).join('');
+const deskOpts=()=>db.desks.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('');
+const pubCard=(i,btn='')=>`<div class="card"><div class="row"><span class="pill y">${esc(i.cat)}</span><span class="pill">${esc(i.when)}</span></div><h3 style="margin-top:.5rem">${esc(i.desc)}</h3><div class="mute">${esc(i.area)} area. Held at ${esc(i.desk)}.</div>${btn}</div>`;
+function nav(){const s=cur(),h=(route||'browse').split('/')[0];
+ const L=[['browse','Found items'],['help','How it works'],...(s?MENU[s.user.role]:[['login','Sign in']])];
+ $('#nav').innerHTML=L.map(([k,t])=>`<a href="#/${k}" class="${h===k?'on':''}">${t}</a>`).join('');
+ $('#who').innerHTML=s?`${esc(s.user.name)} (${s.user.role}) <button class="alt" style="padding:.2rem .6rem" onclick="R.logout();go('browse')">Sign out</button>`:''}
+async function render(){const parts=(route||'browse').split('/'),k=parts[0]in V?parts[0]:'browse',s=cur();
+ if(NEED[k]&&!s){go('login');return}
+ if(NEED[k]&&s.user.role!==NEED[k]){$('#app').innerHTML='<div class="card plain"><h2>Not available for your role</h2><p>Use the menu above for the features your role can access.</p></div>';nav();return}
+ nav();try{$('#app').innerHTML=await V[k](parts[1])}catch(e){$('#app').innerHTML=`<div class="card plain"><h2>${esc(e.message)}</h2></div>`}}
+let route=(()=>{try{return(location.hash||'#/browse').slice(2)}catch{return'browse'}})();
+function go(r){route=r;try{history.replaceState(null,'','#/'+r)}catch{}render()}
+document.addEventListener('click',e=>{const a=e.target.closest('a[href^="#/"]');if(a){e.preventDefault();go(a.getAttribute('href').slice(2))}});
+addEventListener('hashchange',()=>{try{const r=location.hash.slice(2);if(r&&r!==route){route=r;render()}}catch{}});
+const fd=e=>{e.preventDefault();return Object.fromEntries(new FormData(e.target))};
+const run=async(f,ok)=>{try{await f();if(ok)toast(ok)}catch(e){toast(e.message,1);if(e.code===401)go('login')}};
+
+V.browse=async()=>{const items=await R.foundItems(),s=cur();
+ return `<div class="hero"><h1>Lost something on campus?</h1><p>Listings show only a category, a broad area and the week. Exact details stay private until a desk officer verifies you.</p></div>
+ <div class="row" style="margin-bottom:1rem"><input id="q" placeholder="Filter by words, e.g. laptop" oninput="filt()" style="max-width:280px"><select id="c" onchange="filt()" style="max-width:200px"><option>Any</option>${opts(CATS)}</select></div>
+ <div class="grid" id="list">${items.map(i=>pubCard(i,`<p><a class="btn tag" href="#/${s?'claim/'+i.id:'login'}">Start a claim</a></p>`)).join('')||'<p>No items are listed right now.</p>'}</div>`};
+window.filt=async()=>{const q=$('#q').value.toLowerCase(),c=$('#c').value,s=cur(),it=(await R.foundItems()).filter(i=>(c==='Any'||i.cat===c)&&(i.desc+i.area).toLowerCase().includes(q));
+ $('#list').innerHTML=it.map(i=>pubCard(i,`<p><a class="btn tag" href="#/${s?'claim/'+i.id:'login'}">Start a claim</a></p>`)).join('')||'<p>Nothing matches. Try the matching agent under Find my item.</p>'};
+V.help=async()=>{const {pol,desks}=await R.help();
+ return `<h1>How it works</h1><div class="card"><h3>Claim process</h3><p>Finders leave items at a desk. Owners submit a private claim. A desk officer compares your proof with private records, then hands over the item in person. AI only suggests matches and questions. It never decides ownership.</p></div>
+ <h2>Desks</h2><div class="grid">${desks.map(d=>`<div class="card"><h3>${esc(d.name)}</h3><div class="mute">Mon to Fri 9:00 to 17:00. Sat 10:00 to 13:00.</div></div>`).join('')}</div>
+ <h2 style="margin-top:1.4rem">Approved policies</h2>${pol.map(p=>`<div class="card" id="${p.id}"><h3>${p.id}: ${esc(p.title)}</h3><p>${esc(p.text)}</p></div>`).join('')}`};
+V.login=async()=>`<div class="grid"><div class="card plain"><h2>Sign in</h2><form onsubmit="return F.login(event)"><label>Campus email</label><input name="e" type="email" required autocomplete="username"><label>Password</label><input name="p" type="password" required autocomplete="current-password"><p><button>Sign in</button></p></form>
+ <p class="mute">Demo accounts (password Campus#123):</p><div class="row">${[['alice','Member'],['olivia','Library officer'],['omar','Engineering officer'],['mo','Moderator']].map(([u,t])=>`<button class="alt" onclick="F.demo('${u}')">${t}</button>`).join('')}</div>
+ <p><a href="#/reset">Forgot password?</a></p></div>
+ <div class="card plain"><h2>Create account</h2><form onsubmit="return F.signup(event)"><label>Name</label><input name="n" required><label>Campus email (${DOMAIN})</label><input name="e" type="email" required><label>Password</label><input name="p" type="password" required autocomplete="new-password"><p><button class="tag">Create account</button></p></form>
+ <form onsubmit="return F.verify(event)"><label>Verification code</label><input name="e" type="email" placeholder="Your email" required><input name="c" placeholder="6-digit code" required style="margin-top:.4rem"><p><button class="alt">Verify email</button></p></form></div></div>`;
+V.reset=async()=>`<div class="card plain" style="max-width:420px"><h2>Reset password</h2><form onsubmit="return F.reset(event)"><label>Campus email</label><input name="e" type="email" required><label>New password</label><input name="p" type="password" required><p><button>Save new password</button></p></form></div>`;
+V.agent=async()=>`<h1>Find my item</h1><p class="mute">Describe what you lost. The agent searches public listings, narrows by time and area, and asks questions. It never confirms ownership.</p>
+ <div class="card"><form onsubmit="return F.agent(event)"><label>Description</label><textarea name="desc" required placeholder="Help me find my black laptop sleeve"></textarea><div class="grid" style="gap:0 1rem"><div><label>Area</label><input name="area" placeholder="Library"></div><div><label>Date lost</label><input name="date" type="date"></div></div><p><button>Search</button></p></form></div><div id="out"></div>`;
+V.lost=async()=>`<h1>Report a lost item</h1><div class="card"><form onsubmit="return F.lost(event)"><label>Category</label><select name="cat">${opts(CATS)}</select><label>Description</label><textarea name="desc" required></textarea><label>Where</label><input name="area"><label>Date lost</label><input name="date" type="date"><p><button>Save report</button></p></form></div><div id="out"></div>`;
+V.found=async()=>{const mine=await R.myFound();
+ return `<h1>Report a found item</h1><div class="card"><form onsubmit="return F.found(event)"><label>Category</label><select name="cat">${opts(CATS)}</select><label>Public description (shown to everyone)</label><input name="pub" required><label>Broad area</label><input name="area" required><label>Drop-off desk</label><select name="desk">${deskOpts()}</select>
+ <label>Private: identifying detail (officer only)</label><input name="marks" required><label>Private: serial number (optional)</label><input name="serial"><label>Private: exact storage location</label><input name="storage" required><p><button class="tag">Submit found report</button></p></form></div>
+ <h2>Your found reports</h2>${mine.map(i=>`<div class="card"><b>${esc(i.pub)}</b> <span class="pill">${esc(i.status)}</span><div class="mute">Private: ${esc(i.priv.marks)}; stored at ${esc(i.priv.storage)}</div></div>`).join('')||'<p class="mute">None yet.</p>'}`};
+V.claim=async(id)=>{const i=db.items.find(x=>x.id===id);if(!i||i.status!=='open')return'<div class="card plain"><h2>This item is closed or missing</h2></div>';
+ return `<h1>Private claim</h1>${pubCard(pubView(i))}<div class="card plain"><p class="mute">Requirement: ${esc(REQ[i.cat])}</p><form onsubmit="return F.claim(event,'${id}')"><label>Identifying details only the owner would know</label><textarea name="detail" required></textarea><label>Other evidence (purchase proof, serial, photo description)</label><input name="evidence"><p><button class="tag">Submit claim</button></p></form></div>`};
+V.claims=async()=>{const cs=await R.myClaims(),fl=['pending','approved','handed over'];
+ return `<h1>My claims</h1>${cs.map(c=>`<div class="card"><h3>${esc(c.item.desc)}</h3><span class="pill ${c.status==='rejected'?'r':c.status==='pending'?'y':'g'}">${esc(c.status)}</span><div class="steps">${fl.map((s,n)=>`<i class="${c.status==='rejected'||c.status==='closed'?(n===0?'x':''):fl.indexOf(c.status)>=n?'d':''}"></i>`).join('')}</div><div class="mute">Submitted ${esc(c.created)}. ${c.status==='approved'?'Visit '+esc(c.item.desk)+' with your campus ID.':''} ${esc(c.note)}</div></div>`).join('')||'<div class="card plain"><p>No claims yet. <a href="#/browse">Browse found items</a>.</p></div>'}`};
+V.chat=async()=>`<h1>Recovery chat</h1><p class="mute">Ask about deadlines, evidence, collection steps or your own claim status.</p><div class="card plain"><div class="chat" id="ch"><div class="msg a">Hi. Ask me about the claim process or say "my claim status".</div></div><form onsubmit="return F.chat(event)" class="row"><input name="q" required style="flex:1" placeholder="What evidence is accepted?"><button>Send</button></form></div>`;
+V.review=async()=>{const cs=await R.deskClaims();
+ return `<h1>Desk review</h1><p class="mute">You see private records and claim evidence only for your own desk. Overlap is a hint, not a decision.</p>${cs.map(c=>`<div class="card"><div class="row"><h3 style="margin:0">${esc(c.item.pub)}</h3><span class="pill ${c.status==='pending'?'y':c.status==='rejected'?'r':'g'}">${esc(c.status)}</span></div>
+ <p class="mute">Claimant: ${esc(c.claimant)}</p><p><b>Claim:</b> ${esc(c.detail)}<br><b>Evidence:</b> ${esc(c.evidence||'none')}</p>
+ <p><b>Private record:</b> ${esc(c.item.priv.marks)}; serial ${esc(c.item.priv.serial)}; at ${esc(c.item.priv.storage)}</p><p class="mute">Shared terms: ${c.overlap.map(esc).join(', ')||'none'}</p>
+ ${c.status==='pending'?`<div class="row"><input id="n${c.id}" placeholder="Decision note" style="flex:1"><button onclick="F.decide('${c.id}',1)">Approve</button><button class="bad" onclick="F.decide('${c.id}',0)">Reject</button></div>`:''}
+ ${c.status==='approved'?`<label class="row"><input type="checkbox" id="v${c.id}" style="width:auto"> Campus ID checked in person</label><button class="tag" onclick="F.hand('${c.id}')">Record handover</button>`:''}</div>`).join('')||'<div class="card plain"><p>No claims for your desk.</p></div>'}`};
+V.desks=async()=>{const {desks,officers}=await R.desks();
+ return `<h1>Desks &amp; retention</h1>${desks.map(d=>`<div class="card"><h3>${esc(d.name)}</h3><div class="mute">Retention ${d.retention} days. Assign officers:</div>${officers.map(o=>`<label class="row" style="font-weight:400"><input type="checkbox" style="width:auto" ${d.staff.includes(o.id)?'checked':''} onchange="F.staff('${d.id}')" data-d="${d.id}" value="${o.id}"> ${esc(o.name)}</label>`).join('')}</div>`).join('')}<button onclick="F.purge()">Apply retention rule</button>`};
+
+const matchHTML=(m,intro)=>`<div class="trace">${m.steps.map(s=>`<div><span class="ok">ok</span> ${esc(s)}</div>`).join('')}</div>${intro||''}
+ ${m.res.length?`<div class="grid">${m.res.map(r=>pubCard(r.item,`<p><span class="pill g">${r.band}</span> <a class="btn tag" href="#/claim/${r.item.id}">Draft private claim</a></p>`)).join('')}</div>`:'<div class="card plain"><p>No plausible public matches yet. Your report is saved and you can search again later.</p></div>'}`;
+const F={
+ login:e=>{const d=fd(e);run(async()=>{await R.login(d.e,d.p);go(({member:'agent',officer:'review',moderator:'desks'})[cur().user.role])},'Signed in');return false},
+ demo:async u=>{await run(async()=>{await R.login(u+DOMAIN,'Campus#123');go(({member:'agent',officer:'review',moderator:'desks'})[cur().user.role])})},
+ signup:e=>{const d=fd(e);run(async()=>{const c=await R.signup(d.n,d.e,d.p);toast('Demo inbox: your verification code is '+c)});return false},
+ verify:e=>{const d=fd(e);run(async()=>R.verify(d.e,d.c),'Email verified. You can sign in.');return false},
+ reset:e=>{const d=fd(e);run(async()=>{await R.reset(d.e,d.p);go('login')},'If the account exists, the password was updated.');return false},
+ agent:e=>{const d=fd(e);run(async()=>{const r=await R.agent(d);$('#out').innerHTML=matchHTML(r,`<div class="card plain"><p class="mute">Requirement for ${esc(r.cat)}: ${esc(r.req)}</p>${r.q.length?'<b>Questions to help narrow this down</b><ul>'+r.q.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':''}<p class="mute">Staff make the ownership decision. These are suggestions only.</p></div>`)});return false},
+ lost:e=>{const d=fd(e);run(async()=>{const m=await R.lostReport({cat:d.cat,desc:d.desc,area:d.area,date:d.date});$('#out').innerHTML='<h2>Possible matches</h2>'+matchHTML(m)},'Lost report saved');return false},
+ found:e=>{const d=fd(e);run(async()=>{await R.foundReport(d);render()},'Found report submitted');return false},
+ claim:(e,id)=>{const d=fd(e);run(async()=>{await R.claim(id,d);go('claims')},'Claim submitted privately');return false},
+ chat:e=>{const d=fd(e),ch=$('#ch');ch.innerHTML+=`<div class="msg u">${esc(d.q)}</div>`;e.target.reset();
+  run(async()=>{const r=await R.chat(d.q);ch.innerHTML+=`<div class="msg a">${esc(r.text)}${r.cites.length?'\n<span class="mute">Sources: '+r.cites.map(c=>`<a href="#/help">${c}</a>`).join(', ')+'</span>':''}<div class="trace">${r.tr.map(esc).join('<br>')}</div></div>`;ch.scrollTop=1e9});return false},
+ decide:(id,ok)=>run(async()=>{await R.decide(id,!!ok,$('#n'+id).value);render()},'Decision saved'),
+ hand:id=>{if(!$('#v'+id).checked)return toast('Confirm the campus ID check first.',1);run(async()=>{await R.handover(id);render()},'Handover recorded. Item closed.')},
+ staff:id=>run(async()=>{await R.staff(id,[...document.querySelectorAll(`[data-d="${id}"]:checked`)].map(x=>x.value))},'Staff updated'),
+ purge:()=>run(async()=>{const n=await R.purge();toast(n+' item(s) expired by retention rule')})
+};
+(async()=>{if(!db)await seed();render()})();
+</script>
+</body>
+</html>
